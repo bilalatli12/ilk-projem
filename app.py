@@ -3,6 +3,13 @@ import re
 from flask import Flask, render_template, jsonify
 from PyPDF2 import PdfReader
 
+ARABIC_DIACRITICS = re.compile(r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]')
+
+def normalize(text: str) -> str:
+    """Convert common Allah ligature and strip diacritics for robust matching."""
+    text = text.replace('\ufdf2', 'الله')  # Allah ligature
+    return ARABIC_DIACRITICS.sub('', text)
+
 app = Flask(__name__)
 
 LETTER_MEANINGS = {
@@ -47,16 +54,17 @@ def istihare():
     num_pages = len(reader.pages)
     right_index = random.randrange(1, num_pages, 2)
     text = reader.pages[right_index].extract_text() or ""
-    count = len(re.findall("الله", text))
+    norm_text = normalize(text)
+    count = norm_text.count("الله")
     target_index = max(0, right_index - count)
     target_text = reader.pages[target_index].extract_text() or ""
-    lines = [line.strip() for line in target_text.splitlines() if line.strip()]
+    lines = [normalize(line.strip()) for line in target_text.splitlines() if line.strip()]
     if count > 0 and lines:
         line_idx = min(count - 1, len(lines) - 1)
     else:
         line_idx = 0
     line_text = lines[line_idx] if lines else ""
-    letter = line_text[:2] if line_text.startswith('لا') else line_text[:1]
+    letter = line_text[-2:] if line_text.endswith('لا') else line_text[-1:]
     meaning = LETTER_MEANINGS.get(letter, 'Belirsiz')
     return jsonify({
         'right_page': right_index + 1,
